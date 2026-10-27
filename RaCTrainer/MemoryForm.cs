@@ -960,12 +960,11 @@ namespace racman
             public Type fieldType;
 
             public static MobyInspectorRow FromField(FieldInfo field, uint address) {
-                var t = field.FieldType;
                 return new MobyInspectorRow {
                     addr = address,
                     fieldName = field.Name,
-                    fieldType = t
-                };
+                    fieldType = field.FieldType
+            };
             }
         }
     }
