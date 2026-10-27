@@ -257,6 +257,16 @@ namespace racman
 
             watchedMemoryAddressesListView.Items.Add(item);
         }
+        private void AddMemoryWatchW(uint addr, string type) {
+            if (type == "Vec4") {
+                for (uint i = 0; i < 4; i++) {
+                    AddMemoryWatch(addr + (i * 4), "Float", $"vec4_{i}");
+                }
+            }
+            else {
+                AddMemoryWatch(addr, type);
+            }
+        }
 
 
         private void addMemoryWatchButton_Click(object sender, EventArgs e)
@@ -273,8 +283,9 @@ namespace racman
                 MessageBox.Show("Address must be hexadecimal");
                 return;
             }
+            string type = registerAddressTypeCombo.Text;
 
-            AddMemoryWatch(address, registerAddressTypeCombo.Text);
+            AddMemoryWatchW(address, type);
         }
 
 
@@ -619,7 +630,9 @@ namespace racman
                 var field = fields[i];
                 var offset = Marshal.OffsetOf(type, field.Name).ToInt32();
 
+
                 var item = mobyInspectorListView.Items[i];
+                item.Tag = MobyInspectorRow.FromField(field, mobyAddress + (uint)offset);
                 item.Text = $"0x{(mobyAddress + (uint)offset):X}";
                 item.SubItems[1].Text = field.Name;
 
@@ -899,6 +912,61 @@ namespace racman
             uint ptrVal = BitConverter.ToUInt32(bytes.Reverse().ToArray(), 0);
 
             return ptrVal + offset;
+        }
+
+        private void mobyInspectorListView_MouseClick(object sender, MouseEventArgs e) {
+            if (e.Button == MouseButtons.Right) {
+                var focusedItem = mobyInspectorListView.FocusedItem;
+                if (focusedItem != null && focusedItem.Bounds.Contains(e.Location)) {
+                    ContextMenuStrip menuStrip = new ContextMenuStrip();
+                    menuStrip.Items.Add("Add memory watch");
+                    menuStrip.Items[0].Click += AddToMemoryList_Click;
+
+                    menuStrip.Show(Cursor.Position);
+
+                }
+            }
+        }
+
+        private void AddToMemoryList_Click(object sender, EventArgs e) {
+            if (mobyInspectorListView.FocusedItem?.Tag is MobyInspectorRow row) {
+
+                string type = ToWatchType(row.fieldType);
+
+                if (type == "GamePtr") {
+                    uint addrR = ResolveAddress($"ptr({row.addr:X})");
+                    if (addrR == 0) return; // dont add if nullptr lolol
+                    
+                    AddMemoryWatch(addrR, "Pointer", row.fieldName);
+                }
+                else {
+                    AddMemoryWatchW(row.addr, type);
+                }
+            }
+        }
+        private static string ToWatchType(Type t) {
+            if (t == typeof(byte) || t == typeof(sbyte)) return "Byte";
+            if (t == typeof(short) || t == typeof(ushort)) return "Int16";
+            if (t == typeof(int) || t == typeof(uint)) return "Int32";
+            if (t == typeof(long) || t == typeof(ulong)) return "Int64";
+            if (t == typeof(float)) return "Float";
+            if (t.Name == "GamePtr") return "GamePtr";
+            if (t.Name == "Vec4") return "Vec4";
+            return "Pointer";
+        }
+        private class MobyInspectorRow {
+            public uint addr;
+            public string fieldName;
+            public Type fieldType;
+
+            public static MobyInspectorRow FromField(FieldInfo field, uint address) {
+                var t = field.FieldType;
+                return new MobyInspectorRow {
+                    addr = address,
+                    fieldName = field.Name,
+                    fieldType = t
+                };
+            }
         }
     }
 }

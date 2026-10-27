@@ -73,6 +73,7 @@
             "Int16",
             "Byte",
             "Float",
+            "Vec4",
             "Pointer",
             "Instruction"});
             this.registerAddressTypeCombo.Location = new System.Drawing.Point(122, 496);
@@ -171,6 +172,7 @@
             this.mobyInspectorListView.TabIndex = 6;
             this.mobyInspectorListView.UseCompatibleStateImageBehavior = false;
             this.mobyInspectorListView.View = System.Windows.Forms.View.Details;
+            this.mobyInspectorListView.MouseClick += new System.Windows.Forms.MouseEventHandler(this.mobyInspectorListView_MouseClick);
             // 
             // mobyAddressHeader
             // 

@@ -159,8 +159,8 @@ namespace racman
             public byte field44_0x71;
             public byte field45_0x72;
             public byte field46_0x73;
-            public uint p_update;
-            public uint vars;
+            public GamePtr p_update;
+            public GamePtr vars;
             public byte field49_0x7c;
             public byte field50_0x7d;
             public byte field51_0x7e;
