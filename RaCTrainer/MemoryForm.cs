@@ -181,9 +181,12 @@ namespace racman
                     val = bytes[0];
                     break;
             }
+            uint toUseForHex = (uint)val;
 
-            return watched.hexRepresented ? val.ToString("X") : val.ToString();
+            return watched.hexRepresented ? "0x" + toUseForHex.ToString("X") : val.ToString();
+
         }
+        
 
         // New method for adding a memory watch entry
         private void AddMemoryWatch(uint address, string type, string name = "Unknown")
@@ -263,8 +266,7 @@ namespace racman
             try
             {
                 // Parse address
-                var strippedText = registerAddressTextBox.Text.Replace(" ", "").Replace("0x", "").Trim();
-                address = Convert.ToUInt32(strippedText, 16);
+                address = ResolveAddress(registerAddressTextBox.Text);
             }
             catch (Exception ex)
             {
@@ -876,6 +878,27 @@ namespace racman
                 }
                 catch{ }
             }
+        }
+        // syntax: ptr(word)+0x[n]
+        // can be wrapped like ptr(ptr(ptr(word)+0x[n])) etc
+        private static uint ResolveAddress(string expression) {
+            expression = expression.Trim();
+
+            if (!expression.StartsWith("ptr(", StringComparison.OrdinalIgnoreCase))
+                return Convert.ToUInt32(expression.Replace("0x", ""), 16);
+
+            int close = expression.LastIndexOf(')');
+            string inner = expression.Substring(4, close - 4);
+            string offsetPart = expression.Substring(close + 1).Replace("+", "").Trim();
+
+            uint baseAddr = ResolveAddress(inner);
+
+            uint offset = string.IsNullOrEmpty(offsetPart) ? 0 : Convert.ToUInt32(offsetPart.Replace("0x", ""), 16);
+
+            byte[] bytes = func.api.ReadMemory(func.api.getCurrentPID(), baseAddr, 4);
+            uint ptrVal = BitConverter.ToUInt32(bytes.Reverse().ToArray(), 0);
+
+            return ptrVal + offset;
         }
     }
 }
