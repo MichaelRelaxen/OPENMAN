@@ -73,7 +73,8 @@
             "Int16",
             "Byte",
             "Float",
-            "Pointer"});
+            "Pointer",
+            "Instruction"});
             this.registerAddressTypeCombo.Location = new System.Drawing.Point(122, 496);
             this.registerAddressTypeCombo.MaximumSize = new System.Drawing.Size(121, 0);
             this.registerAddressTypeCombo.MinimumSize = new System.Drawing.Size(121, 0);

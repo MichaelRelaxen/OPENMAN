@@ -64,8 +64,14 @@
     <Reference Include="AutoUpdater.NET, Version=1.7.0.0, Culture=neutral, PublicKeyToken=501435c91b35f4bc, processorArchitecture=MSIL">
       <HintPath>..\packages\Autoupdater.NET.Official.1.7.0\lib\net45\AutoUpdater.NET.dll</HintPath>
     </Reference>
+    <Reference Include="Gee.External.Capstone, Version=2.3.0.0, Culture=neutral, PublicKeyToken=b117d7a2dc33ffa6, processorArchitecture=MSIL">
+      <HintPath>..\packages\Gee.External.Capstone.2.3.0\lib\netstandard2.0\Gee.External.Capstone.dll</HintPath>
+    </Reference>
     <Reference Include="KeraLua, Version=1.4.7.0, Culture=neutral, PublicKeyToken=6a194c04b9c89217, processorArchitecture=MSIL">
       <HintPath>..\packages\KeraLua.1.4.7\lib\net46\KeraLua.dll</HintPath>
+    </Reference>
+    <Reference Include="Keystone.Net, Version=0.9.1.1, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\keystoneengine.csharp.0.9.1.1\lib\netstandard2.0\Keystone.Net.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>..\packages\Newtonsoft.Json.13.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
@@ -606,5 +612,7 @@
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\KeraLua.1.4.7\build\net46\KeraLua.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\KeraLua.1.4.7\build\net46\KeraLua.targets'))" />
+    <Error Condition="!Exists('..\packages\keystoneengine.csharp.0.9.1.1\build\keystoneengine.csharp.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\keystoneengine.csharp.0.9.1.1\build\keystoneengine.csharp.targets'))" />
   </Target>
+  <Import Project="..\packages\keystoneengine.csharp.0.9.1.1\build\keystoneengine.csharp.targets" Condition="Exists('..\packages\keystoneengine.csharp.0.9.1.1\build\keystoneengine.csharp.targets')" />
 </Project>

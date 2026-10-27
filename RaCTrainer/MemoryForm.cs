@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Gee.External.Capstone.PowerPc;
+using Gee.External.Capstone;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -13,6 +15,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using static racman.rac2;
+using Keystone;
+using Newtonsoft.Json.Linq;
 
 namespace racman
 { 
@@ -27,9 +31,11 @@ namespace racman
             public int subID;
             public uint size;
             public bool isFloat;
+            public bool isInstr;
             public bool hexRepresented;
             public bool isFrozen;
             public int freezeSub;
+            public byte[] originalBytes;
             public string type;
             public string name;
         }
@@ -40,8 +46,6 @@ namespace racman
             mobyInstancesEndAddr = instancesEnd;
         }
 
-        // Game IDs for which the moby inspector is wired up. Other games get the
-        // inspector force-hidden and the toggle disabled.
         private static readonly HashSet<string> MobyInspectorSupportedGames = new HashSet<string>
         {
             "NPEA00385", // RAC1
@@ -50,9 +54,7 @@ namespace racman
             "NPEA00423", // RAC4 (Deadlocked)
         };
 
-        // Form width when the moby inspector is collapsed — just wide enough for the
-        // watched-addresses pane. Pulled from the designer width of the form when
-        // visible (986 client width).
+
         private const int CollapsedClientWidth = 428;
         private int expandedClientWidth;
 
@@ -69,8 +71,6 @@ namespace racman
             ApplyMobyInspectorVisibility();
         }
 
-        // Returns true if the moby inspector should be shown for the current game.
-        // Reads the persisted preference for supported games; always false otherwise.
         private bool ShouldShowMobyInspector()
         {
             if (!MobyInspectorSupportedGames.Contains(AttachPS3Form.game))
@@ -80,7 +80,6 @@ namespace racman
             try { saved = func.GetConfigData("config.txt", "mobyInspectorVisible"); }
             catch { saved = ""; }
 
-            // Default to shown for supported games when the preference is missing.
             if (string.IsNullOrEmpty(saved)) return true;
             return !saved.Equals("false", StringComparison.OrdinalIgnoreCase);
         }
@@ -131,7 +130,6 @@ namespace racman
             }
             catch
             {
-                // Persistence is best-effort; the toggle still works in-session.
             }
 
             ApplyMobyInspectorVisibility();
@@ -149,14 +147,20 @@ namespace racman
             }));
         }
 
-        // Formats raw big-endian bytes from the console into the display string for a watch.
         private static string FormatWatchedValue(WatchedAddress watched, byte[] bytes)
         {
             if (watched.isFloat)
             {
                 return BitConverter.ToSingle(bytes, 0).ToString();
             }
+            if (watched.isInstr) {
+                using (var disassembler = CapstoneDisassembler.CreatePowerPcDisassembler(PowerPcDisassembleMode.BigEndian | PowerPcDisassembleMode.Bit64)) {
+                    PowerPcInstruction[] instructions = disassembler.Disassemble(bytes.Reverse().ToArray(), (long)watched.address);
 
+                    var insn = instructions[0];
+                    return insn.Mnemonic + " " + insn.Operand;
+                }
+            }
             long val;
 
             switch (watched.size)
@@ -217,27 +221,29 @@ namespace racman
                     watched.size = 4;
                     watched.hexRepresented = true;
                     break;
+                case "Instruction":
+                    watched.size = 4;
+                    watched.isInstr = true;
+                    break;
                 default:
                     watched.size = 4;
                     watched.hexRepresented = true;
                     break;
             }
 
-            // Assign before subscribing — SetItemValueText reads item.Tag, and the
-            // subscription callback can fire as soon as it's registered.
+
             item.Tag = watched;
 
-            // Seed the initial value. The subscription uses MemoryCondition.Changed
-            // against an all-zero baseline, so an address that already holds 0 would
-            // never fire a callback and would sit on "Waiting..." forever.
+
             try
             {
                 byte[] initial = api.ReadMemory(api.getCurrentPID(), address, watched.size);
+                watched.originalBytes = initial;
                 item.SubItems[2].Text = FormatWatchedValue(watched, initial);
             }
             catch (Exception)
             {
-                // Leave "Waiting..." — the subscription may still deliver a value later.
+                
             }
 
             // Subscribe to the memory watch and get data updates
@@ -306,11 +312,46 @@ namespace racman
                     menuStrip.Items.Add("Freeze/unfreeze value");
                     menuStrip.Items[2].Click += MenuStripEditValue_Freeze;
 
+                    menuStrip.Items.Add("Assemble");
+                    menuStrip.Items[3].Click += MenuStripAssemble_Click;
+
+                    menuStrip.Items.Add("Restore");
+                    menuStrip.Items[4].Click += MenuStripRestore_Click;
+
                     menuStrip.Items.Add("Delete");
-                    menuStrip.Items[3].Click += MenuStripDelete_Click;
+                    menuStrip.Items[5].Click += MenuStripDelete_Click;
 
                     menuStrip.Show(Cursor.Position);
 
+                }
+            }
+        }
+        private void MenuStripAssemble_Click(object sender, EventArgs e) {
+            var watched = (WatchedAddress)watchedMemoryAddressesListView.FocusedItem?.Tag;
+
+            if (watched == null || !watched.isInstr) 
+                return;
+
+            var dialog = new SimpleInputDialogForm("Assemble instruction", watchedMemoryAddressesListView.FocusedItem.SubItems[2].Text);
+
+            if (dialog.ShowDialog() == DialogResult.OK) {
+                try {
+                    using (var engine = new Engine(Keystone.Architecture.PPC, Mode.PPC64 | Mode.BIG_ENDIAN)) {
+                        var word = engine.Assemble(dialog.inputTextBox.Text, watched.address).Buffer;
+                        func.api.WriteMemory(func.api.getCurrentPID(), watched.address, 4, word);
+                    }
+                }
+                catch (Exception ex) { MessageBox.Show("Assembly failed: " + ex.Message); }
+            }
+        }
+
+        private void MenuStripRestore_Click(object sender, EventArgs e) {
+            var focusedItem = watchedMemoryAddressesListView.FocusedItem;
+            if (focusedItem != null) {
+                if (focusedItem.Tag != null) {
+                    WatchedAddress watched = (WatchedAddress)focusedItem.Tag;
+
+                    api.WriteMemory(api.getCurrentPID(), watched.address, watched.size, watched.originalBytes);
                 }
             }
         }
@@ -361,12 +402,13 @@ namespace racman
 
                     IPS3API api = func.api;
 
-                    // Build default text: strip the freeze indicator the list view adds,
-                    // and prepend "0x" for hex-represented values so the format is obvious.
+
                     string defaultText = focusedItem.SubItems[2].Text;
                     const string frozenPrefix = "❄: ";
+
                     if (defaultText.StartsWith(frozenPrefix))
                         defaultText = defaultText.Substring(frozenPrefix.Length);
+
                     if (watched.hexRepresented && !defaultText.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
                         defaultText = "0x" + defaultText;
 
@@ -384,8 +426,6 @@ namespace racman
                                 float value;
                                 if (isHex)
                                 {
-                                    // Interpret 0x… as a raw IEEE-754 bit pattern, useful for
-                                    // round-tripping the exact bits shown elsewhere.
                                     uint bits = UInt32.Parse(hexBody, System.Globalization.NumberStyles.HexNumber);
                                     value = BitConverter.ToSingle(BitConverter.GetBytes(bits), 0);
                                 }
@@ -401,8 +441,6 @@ namespace racman
                                 long value;
                                 if (isHex)
                                 {
-                                    // Parse as unsigned so the full width is usable (e.g. 0xFFFFFFFF
-                                    // for a 4-byte field), then reinterpret as signed.
                                     value = (long)UInt64.Parse(hexBody, System.Globalization.NumberStyles.HexNumber);
                                 }
                                 else
@@ -458,9 +496,7 @@ namespace racman
             }
         }
 
-        // Cached moby entries from the most recent refresh. The combo box may
-        // present these sorted, so we can't rely on combo SelectedIndex to
-        // recompute moby addresses — we look them up from this list instead.
+
         private class MobyEntry
         {
             public uint address;
